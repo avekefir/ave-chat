@@ -1,6 +1,4 @@
-// Определяем адрес сервера автоматически
-const serverUrl = window.location.origin;
-const socket = io(serverUrl);
+const socket = io();
 
 // Элементы DOM
 const loginContainer = document.getElementById('login-container');
@@ -15,6 +13,7 @@ const userCountSpan = document.getElementById('user-count');
 
 let currentNickname = '';
 
+// --- Вход в чат ---
 joinBtn.addEventListener('click', () => {
   const nickname = nicknameInput.value.trim();
   if (nickname === '') {
@@ -23,17 +22,21 @@ joinBtn.addEventListener('click', () => {
   }
   currentNickname = nickname;
   
+  // Отправляем событие join на сервер
   socket.emit('join', nickname);
 
-  fetch(`${serverUrl}/api/messages`)
+  // Запрашиваем историю сообщений
+  fetch('/api/messages')
     .then(response => response.json())
     .then(messages => {
-      messagesDiv.innerHTML = '';
+      messagesDiv.innerHTML = ''; // очищаем
       messages.forEach(addMessageToDom);
+      // Прокручиваем вниз
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     })
     .catch(err => console.error('Ошибка загрузки истории:', err));
 
+  // Показываем окно чата, скрываем логин
   loginContainer.style.display = 'none';
   chatContainer.style.display = 'flex';
   messageInput.disabled = false;
@@ -41,6 +44,7 @@ joinBtn.addEventListener('click', () => {
   messageInput.focus();
 });
 
+// --- Отправка сообщения ---
 function sendMessage() {
   const text = messageInput.value.trim();
   if (text === '') return;
@@ -55,11 +59,15 @@ messageInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') sendMessage();
 });
 
+// --- Обработчики Socket.IO ---
+
+// Получение нового сообщения
 socket.on('new message', (msg) => {
   addMessageToDom(msg);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 });
 
+// Добавление сообщения в DOM
 function addMessageToDom(msg) {
   const messageEl = document.createElement('div');
   messageEl.classList.add('message');
@@ -74,6 +82,7 @@ function addMessageToDom(msg) {
   messagesDiv.appendChild(messageEl);
 }
 
+// Простейшая защита от XSS (экранирование HTML)
 function escapeHtml(unsafe) {
   return unsafe
     .replace(/&/g, "&amp;")
@@ -83,11 +92,18 @@ function escapeHtml(unsafe) {
     .replace(/'/g, "&#039;");
 }
 
+// Обработка списка онлайн пользователей
 socket.on('online users', (users) => {
   updateUsersList(users);
 });
 
 socket.on('user joined', (nickname) => {
+  // Можно добавить системное сообщение, но для простоты просто обновим список
+  // Список обновится при следующем событии, но лучше запросить актуальный список
+  // В данном примере сервер не рассылает полный список при каждом подключении/отключении,
+  // только новому пользователю. Поэтому для простоты будем обновлять список через запрос?
+  // Альтернатива: сервер шлёт событие 'user joined' и 'user left', клиент сам добавляет/удаляет.
+  // Мы реализуем добавление/удаление на основе этих событий.
   addUserToSidebar(nickname);
 });
 
@@ -95,6 +111,7 @@ socket.on('user left', (nickname) => {
   removeUserFromSidebar(nickname);
 });
 
+// Функции для работы со списком пользователей
 function updateUsersList(users) {
   usersList.innerHTML = '';
   users.forEach(user => {
@@ -107,6 +124,7 @@ function updateUsersList(users) {
 }
 
 function addUserToSidebar(nickname) {
+  // Проверяем, есть ли уже такой пользователь
   if (document.querySelector(`[data-nickname="${nickname}"]`)) return;
   const li = document.createElement('li');
   li.textContent = nickname;
@@ -123,6 +141,7 @@ function removeUserFromSidebar(nickname) {
   }
 }
 
+// Обработка ошибок от сервера
 socket.on('error', (msg) => {
   alert('Ошибка: ' + msg);
 });
