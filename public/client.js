@@ -250,7 +250,131 @@ function sendVoiceMessage(blob) {
   };
   reader.readAsDataURL(blob);
 }
+// --- КРАСИВЫЙ ПЛЕЕР ДЛЯ ГОЛОСОВЫХ ---
 
+// Создание кастомного плеера
+function createCustomAudioPlayer(audioUrl, msgId) {
+  const container = document.createElement('div');
+  container.className = 'custom-audio-player';
+  container.dataset.msgId = msgId;
+  
+  const audio = new Audio(audioUrl);
+  audio.preload = 'metadata';
+  
+  // Кнопка play/pause
+  const playBtn = document.createElement('button');
+  playBtn.className = 'play-pause-btn';
+  playBtn.innerHTML = '▶';
+  
+  // Визуализация
+  const visualization = document.createElement('div');
+  visualization.className = 'visualization';
+  for (let i = 0; i < 5; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'visualization-bar';
+    visualization.appendChild(bar);
+  }
+  const bars = visualization.children;
+  
+  // Прогресс-бар
+  const progressContainer = document.createElement('div');
+  progressContainer.className = 'progress-container';
+  
+  const progressBar = document.createElement('div');
+  progressBar.className = 'progress-bar';
+  
+  const progressHandle = document.createElement('div');
+  progressHandle.className = 'progress-handle';
+  
+  progressBar.appendChild(progressHandle);
+  progressContainer.appendChild(progressBar);
+  
+  // Время
+  const timeDisplay = document.createElement('span');
+  timeDisplay.className = 'time-display';
+  timeDisplay.textContent = '0:00';
+  
+  // Индикатор громкости (для анимации)
+  const volumeIndicator = document.createElement('div');
+  volumeIndicator.className = 'volume-indicator';
+  for (let i = 0; i < 5; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'volume-dot';
+    volumeIndicator.appendChild(dot);
+  }
+  
+  // Собираем всё вместе
+  container.appendChild(playBtn);
+  container.appendChild(visualization);
+  container.appendChild(progressContainer);
+  container.appendChild(timeDisplay);
+  container.appendChild(volumeIndicator);
+  
+  // --- Логика плеера ---
+  let isPlaying = false;
+  let animationFrame;
+  
+  // Обновление времени и прогресса
+  audio.addEventListener('timeupdate', () => {
+    const progress = (audio.currentTime / audio.duration) * 100 || 0;
+    progressBar.style.width = `${progress}%`;
+    
+    const minutes = Math.floor(audio.currentTime / 60);
+    const seconds = Math.floor(audio.currentTime % 60);
+    timeDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  });
+  // Анимация визуализации
+  function updateVisualization() {
+    if (isPlaying && audio.played.length > 0) {
+      // Имитация визуализации (в реальном проекте можно использовать AnalyserNode)
+      for (let i = 0; i < bars.length; i++) {
+        const randomHeight = Math.random() * 30 + 10;
+        bars[i].style.height = `${randomHeight}px`;
+        bars[i].classList.add('active');
+      }
+      animationFrame = requestAnimationFrame(updateVisualization);
+    } else {
+      // Возврат к состоянию покоя
+      for (let i = 0; i < bars.length; i++) {
+        bars[i].style.height = '15px';
+        bars[i].classList.remove('active');
+      }
+    }
+  }
+  // Play/Pause
+  playBtn.addEventListener('click', () => {
+    if (isPlaying) {
+      audio.pause();
+      playBtn.innerHTML = '▶';
+      playBtn.classList.remove('playing');
+      cancelAnimationFrame(animationFrame);
+    } else {
+      audio.play();
+      playBtn.innerHTML = '⏸';
+      playBtn.classList.add('playing');
+      updateVisualization();
+    }
+    isPlaying = !isPlaying;
+  });
+  
+  // Клик по прогресс-бару
+  progressContainer.addEventListener('click', (e) => {
+    const rect = progressContainer.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = percent * audio.duration;
+  });
+  
+  // При окончании
+  audio.addEventListener('ended', () => {
+    isPlaying = false;
+    playBtn.innerHTML = '▶';
+    playBtn.classList.remove('playing');
+    progressBar.style.width = '0%';
+    timeDisplay.textContent = '0:00';
+  });
+  
+  return container;
+}
 // Обработчик для кнопки голоса (простой клик)
 if (voiceBtn) {
   voiceBtn.addEventListener('click', (e) => {
@@ -286,22 +410,49 @@ function addTextMessageToDom(msg) {
   messagesDiv.appendChild(messageEl);
 }
 
+// Обновленная функция добавления голосового сообщения
 function addVoiceMessageToDom(msg) {
   const messageEl = document.createElement('div');
   messageEl.classList.add('message');
   
   const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
   const filename = msg.content || msg.text || '';
-  const audioUrl = `/voice/${escapeHtml(filename)}`;
+  const audioUrl = `/voice/${encodeURIComponent(filename)}`;
   
   messageEl.innerHTML = `
     <span class="nickname">${escapeHtml(msg.nickname)}</span>
     <span class="timestamp">${time}</span>
-    <div class="voice-message">
-      <audio controls src="${audioUrl}" preload="metadata"></audio>
-    </div>
+    <div class="voice-message" data-audio-url="${audioUrl}" data-msg-id="${msg.id}"></div>
   `;
+  
   messagesDiv.appendChild(messageEl);
+  
+  // Добавляем кастомный плеер
+  const voiceContainer = messageEl.querySelector('.voice-message');
+  const customPlayer = createCustomAudioPlayer(audioUrl, msg.id);
+  voiceContainer.appendChild(customPlayer);
+}
+
+// Обновляем кнопку записи
+function updateRecordingUI(isRec) {
+  if (isRec) {
+    voiceBtn.innerHTML = '⏹️ <span class="recording-wave"><span></span><span></span><span></span></span>';
+    voiceBtn.style.background = 'linear-gradient(135deg, #ff4444, #ff6b6b)';
+    voiceBtn.classList.add('recording');
+    if (recordingStatus) {
+      recordingStatus.style.display = 'inline-flex';
+      recordingStatus.innerHTML = '🔴 Запись <span class="recording-wave"><span></span><span></span><span></span></span>';
+    }
+    messageInput.disabled = true;
+    sendBtn.disabled = true;
+  } else {
+    voiceBtn.innerHTML = '🎤 Записать';
+    voiceBtn.style.background = '';
+    voiceBtn.classList.remove('recording');
+    if (recordingStatus) recordingStatus.style.display = 'none';
+    messageInput.disabled = false;
+    sendBtn.disabled = false;
+  }
 }
 
 function escapeHtml(unsafe) {
