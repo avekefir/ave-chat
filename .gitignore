@@ -10,6 +10,8 @@ voice_messages/
 voice_messages/*
 voice_messages/**/*
 
+images/
+
 # Логи
 npm-debug.log*
 yarn-debug.log*
