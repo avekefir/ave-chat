@@ -664,3 +664,121 @@ body {
     width: 3px;
   }
 }
+
+/* ===== ИСПРАВЛЕНИЕ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ ===== */
+
+/* Фикс для кнопки play/pause на мобильных */
+@media screen and (max-width: 768px) {
+  /* Контейнер голосового сообщения */
+  .voice-message {
+    max-width: 240px;
+    padding: 12px 14px; /* Немного больше padding */
+  }
+  
+  /* Кастомный плеер */
+  .custom-audio-player {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px; /* Фиксированная минимальная высота */
+  }
+  
+  /* Кнопка play/pause - ИСПРАВЛЕНО */
+  .play-pause-btn {
+    width: 44px !important;    /* Принудительная ширина */
+    height: 44px !important;   /* Принудительная высота (квадратная) */
+    min-width: 44px;           /* Минимальная ширина */
+    min-height: 44px;          /* Минимальная высота */
+    font-size: 20px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    border: 2px solid white;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;                 /* Убираем отступы */
+    padding: 0;                /* Убираем внутренние отступы */
+    flex-shrink: 0;            /* Запрещаем сжатие */
+    box-sizing: border-box;    /* Учитываем border в размерах */
+  }
+  
+  /* Визуализация */
+  .visualization {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 1;            /* Разрешаем сжатие */
+  }
+  
+  .visualization-bar {
+    width: 4px;
+    min-width: 3px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 2px;
+  }
+  
+  /* Прогресс-контейнер */
+  .progress-container {
+    height: 6px;               /* Чуть выше для удобства */
+    min-width: 60px;           /* Минимальная ширина */
+    flex: 1;
+    cursor: pointer;
+  }
+  
+  /* Время */
+  .time-display {
+    font-size: 12px;
+    min-width: 45px;
+    text-align: right;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  /* Индикатор громкости (можем скрыть на мобильных для экономии места) */
+  .volume-indicator {
+    display: none; /* Скрываем на мобильных */
+  }
+  
+  /* Альтернатива: если хочешь оставить индикатор, то раскомментируй:
+  .volume-indicator {
+    display: flex;
+    gap: 2px;
+    margin-left: 4px;
+  }
+  
+  .volume-dot {
+    width: 3px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+  }
+  */
+}
+
+/* Для очень маленьких экранов */
+@media screen and (max-width: 480px) {
+  .voice-message {
+    max-width: 220px;
+    padding: 10px 12px;
+  }
+  
+  .play-pause-btn {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 18px;
+  }
+  
+  .visualization-bar {
+    width: 3px;
+  }
+  
+  .time-display {
+    min-width: 40px;
+    font-size: 11px;
+  }
+}

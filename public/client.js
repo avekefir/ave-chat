@@ -250,7 +250,7 @@ function sendVoiceMessage(blob) {
   };
   reader.readAsDataURL(blob);
 }
-// --- КРАСИВЫЙ ПЛЕЕР ДЛЯ ГОЛОСОВЫХ ---
+// --- КРАСИВЫЙ ПЛЕЕР ДЛЯ ГОЛОСОВЫХ (исправлено для мобильных) ---
 
 // Создание кастомного плеера
 function createCustomAudioPlayer(audioUrl, msgId) {
@@ -261,10 +261,11 @@ function createCustomAudioPlayer(audioUrl, msgId) {
   const audio = new Audio(audioUrl);
   audio.preload = 'metadata';
   
-  // Кнопка play/pause
+  // Кнопка play/pause - с явными размерами
   const playBtn = document.createElement('button');
   playBtn.className = 'play-pause-btn';
   playBtn.innerHTML = '▶';
+  playBtn.setAttribute('aria-label', 'Play');
   
   // Визуализация
   const visualization = document.createElement('div');
@@ -294,7 +295,7 @@ function createCustomAudioPlayer(audioUrl, msgId) {
   timeDisplay.className = 'time-display';
   timeDisplay.textContent = '0:00';
   
-  // Индикатор громкости (для анимации)
+  // Индикатор громкости (только для десктопа, на мобильных скроем CSS)
   const volumeIndicator = document.createElement('div');
   volumeIndicator.className = 'volume-indicator';
   for (let i = 0; i < 5; i++) {
@@ -323,12 +324,13 @@ function createCustomAudioPlayer(audioUrl, msgId) {
     const seconds = Math.floor(audio.currentTime % 60);
     timeDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
   });
+  
   // Анимация визуализации
   function updateVisualization() {
     if (isPlaying && audio.played.length > 0) {
       // Имитация визуализации (в реальном проекте можно использовать AnalyserNode)
       for (let i = 0; i < bars.length; i++) {
-        const randomHeight = Math.random() * 30 + 10;
+        const randomHeight = Math.random() * 20 + 10; // Уменьшил максимальную высоту
         bars[i].style.height = `${randomHeight}px`;
         bars[i].classList.add('active');
       }
@@ -336,22 +338,28 @@ function createCustomAudioPlayer(audioUrl, msgId) {
     } else {
       // Возврат к состоянию покоя
       for (let i = 0; i < bars.length; i++) {
-        bars[i].style.height = '15px';
+        bars[i].style.height = '12px';
         bars[i].classList.remove('active');
       }
     }
   }
+  
   // Play/Pause
-  playBtn.addEventListener('click', () => {
+  playBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     if (isPlaying) {
       audio.pause();
       playBtn.innerHTML = '▶';
       playBtn.classList.remove('playing');
+      playBtn.setAttribute('aria-label', 'Play');
       cancelAnimationFrame(animationFrame);
     } else {
       audio.play();
       playBtn.innerHTML = '⏸';
       playBtn.classList.add('playing');
+      playBtn.setAttribute('aria-label', 'Pause');
       updateVisualization();
     }
     isPlaying = !isPlaying;
@@ -359,6 +367,9 @@ function createCustomAudioPlayer(audioUrl, msgId) {
   
   // Клик по прогресс-бару
   progressContainer.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     const rect = progressContainer.getBoundingClientRect();
     const percent = (e.clientX - rect.left) / rect.width;
     audio.currentTime = percent * audio.duration;
@@ -369,6 +380,7 @@ function createCustomAudioPlayer(audioUrl, msgId) {
     isPlaying = false;
     playBtn.innerHTML = '▶';
     playBtn.classList.remove('playing');
+    playBtn.setAttribute('aria-label', 'Play');
     progressBar.style.width = '0%';
     timeDisplay.textContent = '0:00';
   });
