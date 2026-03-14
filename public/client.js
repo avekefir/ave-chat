@@ -399,12 +399,21 @@ if (voiceBtn) {
 // --- Обработчики Socket.IO ---
 socket.on('new message', (msg) => {
   console.log('Получено сообщение:', msg);
+  
+  // Сохраняем последний ID сообщения для позиционирования
+  lastMessageId = msg.id;
+  
   if (msg.type === 'voice') {
     addVoiceMessageToDom(msg);
   } else {
     addTextMessageToDom(msg);
   }
+  
+  // Прокручиваем вниз
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  
+  // Обновляем позицию индикатора печати
+  setTimeout(updateTypingPosition, 100);
 });
 
 function addTextMessageToDom(msg) {
@@ -520,6 +529,131 @@ function removeUserFromSidebar(nickname) {
 
 socket.on('error', (msg) => {
   alert('Ошибка: ' + msg);
+});
+
+// --- ВЕРХНИЙ ИНДИКАТОР ПЕЧАТИ ---
+let typingTimer;
+let isTyping = false;
+const TYPING_TIMEOUT = 3000; // 3 секунды
+
+// Создаем верхний индикатор
+let typingStatus = document.getElementById('typing-status');
+if (!typingStatus) {
+    typingStatus = document.createElement('div');
+    typingStatus.id = 'typing-status';
+    typingStatus.className = 'typing-status';
+    typingStatus.innerHTML = `
+        <span class="typing-text"></span>
+        <span class="typing-dots">
+            <span>.</span>
+            <span>.</span>
+            <span>.</span>
+        </span>
+    `;
+    document.body.appendChild(typingStatus);
+    console.log('✅ Верхний индикатор создан');
+}
+
+// Добавляем класс к chat-container для отступа
+
+// Обработка ввода текста
+messageInput.addEventListener('input', () => {
+    if (!currentNickname) return;
+    
+    if (!isTyping) {
+        isTyping = true;
+        socket.emit('typing start');
+        console.log('📤 typing start emitted');
+    }
+    
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => {
+        if (isTyping) {
+            isTyping = false;
+            socket.emit('typing stop');
+            console.log('📤 typing stop emitted');
+        }
+    }, TYPING_TIMEOUT);
+});
+
+messageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && messageInput.value.trim() !== '') {
+        clearTimeout(typingTimer);
+        if (isTyping) {
+            isTyping = false;
+            socket.emit('typing stop');
+        }
+    }
+});
+
+sendBtn.addEventListener('click', () => {
+    clearTimeout(typingTimer);
+    if (isTyping) {
+        isTyping = false;
+        socket.emit('typing stop');
+    }
+});
+
+// Хранилище печатающих пользователей
+let typingUsers = new Map();
+
+socket.on('typing start', (nickname) => {
+    console.log('📥 RECEIVED typing start:', nickname);
+    if (nickname === currentNickname) return;
+    
+    if (!typingUsers.has(nickname)) {
+        typingUsers.set(nickname, setTimeout(() => {
+            typingUsers.delete(nickname);
+            updateTypingIndicator();
+        }, 3500));
+    }
+    updateTypingIndicator();
+});
+
+socket.on('typing stop', (nickname) => {
+    console.log('📥 RECEIVED typing stop:', nickname);
+    if (nickname === currentNickname) return;
+    
+    if (typingUsers.has(nickname)) {
+        clearTimeout(typingUsers.get(nickname));
+        typingUsers.delete(nickname);
+    }
+    updateTypingIndicator();
+});
+
+function updateTypingIndicator() {
+    const users = Array.from(typingUsers.keys());
+    const typingTextEl = document.querySelector('#typing-status .typing-text');
+    
+    if (!typingTextEl) return;
+    
+    if (users.length === 0) {
+        typingStatus.classList.remove('visible');
+        if (chatContainer) chatContainer.classList.remove('with-typing');
+        return;
+    }
+    
+    let text = '';
+    if (users.length === 1) {
+        text = `${users[0]} печатает`;
+    } else if (users.length === 2) {
+        text = `${users[0]} и ${users[1]} печатают`;
+    } else {
+        text = `${users[0]} и еще ${users.length - 1} печатают`;
+    }
+    
+    typingTextEl.textContent = text;
+    typingStatus.classList.add('visible');
+    if (chatContainer) chatContainer.classList.add('with-typing');
+    
+    console.log('✅ Верхний индикатор показывает:', text);
+}
+
+// Очищаем индикатор при выходе из чата
+window.addEventListener('beforeunload', () => {
+    if (isTyping) {
+        socket.emit('typing stop');
+    }
 });
 
 // --- Мобильное меню ---
