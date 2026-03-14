@@ -33,6 +33,8 @@ app.get('/api/messages', (req, res) => {
 
 // Хранилище никнеймов подключённых пользователей
 const users = new Map();
+// Хранилище для индикатора печати
+let typingUsers = new Map(); // socket.id -> { nickname, timeout }
 
 io.on('connection', (socket) => {
   console.log('Новое подключение:', socket.id);
@@ -50,6 +52,41 @@ io.on('connection', (socket) => {
     socket.emit('online users', onlineUsers);
   });
 
+  // --- Обработка индикатора печати ---
+  socket.on('typing start', () => {
+    const nickname = users.get(socket.id);
+    if (!nickname) return;
+    
+    // Если уже есть таймер для этого пользователя - очищаем
+    if (typingUsers.has(socket.id)) {
+      clearTimeout(typingUsers.get(socket.id).timeout);
+    }
+    
+    // Устанавливаем новый таймер
+    const timeout = setTimeout(() => {
+      // Если пользователь не печатал 3 секунды - убираем индикатор
+      typingUsers.delete(socket.id);
+      socket.broadcast.emit('typing stop', nickname);
+    }, 3000);
+    
+    typingUsers.set(socket.id, { nickname, timeout });
+    
+    // Сообщаем всем КРОМЕ отправителя, что этот пользователь печатает
+    socket.broadcast.emit('typing start', nickname);
+  });
+
+  socket.on('typing stop', () => {
+    const nickname = users.get(socket.id);
+    if (!nickname) return;
+    
+    if (typingUsers.has(socket.id)) {
+      clearTimeout(typingUsers.get(socket.id).timeout);
+      typingUsers.delete(socket.id);
+    }
+    
+    socket.broadcast.emit('typing stop', nickname);
+  });
+
   // Обработка текстового сообщения
   socket.on('new message', (data) => {
     const nickname = users.get(socket.id);
@@ -60,6 +97,13 @@ io.on('connection', (socket) => {
 
     const text = data.text?.trim();
     if (!text) return;
+
+    // Останавливаем индикатор печати при отправке сообщения
+    if (typingUsers.has(socket.id)) {
+      clearTimeout(typingUsers.get(socket.id).timeout);
+      typingUsers.delete(socket.id);
+      socket.broadcast.emit('typing stop', nickname);
+    }
 
     try {
       const messageId = db.saveMessage(nickname, text, 'text');
@@ -90,7 +134,7 @@ io.on('connection', (socket) => {
       const fileName = `${Date.now()}_${socket.id}.webm`;
       const filePath = path.join(voiceDir, fileName);
       
-      // Убираем метаданные из base64 (удаляем "audio/webm;base64," если есть)
+      // Убираем метаданные из base64
       const base64Data = data.audioData.replace(/^data:audio\/webm;base64,/, '');
       
       // Сохраняем файл
@@ -118,6 +162,13 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const nickname = users.get(socket.id);
     if (nickname) {
+      // Очищаем индикатор печати при отключении
+      if (typingUsers.has(socket.id)) {
+        clearTimeout(typingUsers.get(socket.id).timeout);
+        typingUsers.delete(socket.id);
+        socket.broadcast.emit('typing stop', nickname);
+      }
+      
       users.delete(socket.id);
       console.log(`${nickname} отключился`);
       io.emit('user left', nickname);
