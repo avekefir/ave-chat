@@ -1227,3 +1227,197 @@ body.dark-theme #typing-status {
     width: 100%; /* На мобильных сайдбар скрыт */
   }
 }
+
+/* Десктопная версия - кнопки при наведении */
+@media screen and (min-width: 769px) {
+  .message {
+    position: relative;
+    max-width: 70%;
+  }
+  
+  .message.own-message {
+    align-self: flex-end;
+    margin-left: auto;
+    margin-right: 20px; /* Увеличил отступ справа */
+  }
+  
+  .message-controls {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    right: -45px; /* Сдвинул чуть левее */
+    display: flex;
+    gap: 5px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: white;
+    border-radius: 25px;
+    padding: 5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    z-index: 100;
+  }
+  
+  /* Для своих сообщений кнопки слева */
+  .message.own-message .message-controls {
+    right: auto;
+    left: -45px; /* Слева от сообщения */
+  }
+  
+  .message:hover .message-controls {
+    opacity: 1;
+  }
+  
+  .message-controls button {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  
+  .message-controls button:hover {
+    transform: scale(1.1);
+  }
+  
+  .edit-btn {
+    background: #3498db;
+    color: white;
+  }
+  
+  .delete-btn {
+    background: #e74c3c;
+    color: white;
+  }
+  
+  /* Скрываем мобильные кнопки на десктопе */
+  .message-controls.mobile {
+    display: none;
+  }
+  
+  /* Индикатор редактирования */
+  .edited-indicator {
+    font-size: 10px;
+    color: #7f8c8d;
+    margin-left: 4px;
+    font-style: italic;
+  }
+}
+
+/* ===== МОБИЛЬНОЕ УПРАВЛЕНИЕ СООБЩЕНИЯМИ ===== */
+@media screen and (max-width: 768px) {
+  /* Контейнер с кнопками */
+  .message-controls.mobile {
+    position: fixed;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    padding: 6px;
+    border-radius: 40px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    z-index: 2000;
+    border: 1px solid rgba(0,0,0,0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    pointer-events: auto;
+    /* По умолчанию справа */
+    right: 10px;
+    left: auto;
+    transform: none;
+  }
+  
+  .message-controls.mobile.show {
+    display: flex;
+  }
+  
+  /* Кнопки */
+  .message-controls.mobile button {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  
+  .message-controls.mobile button:active {
+    transform: scale(0.9);
+  }
+  
+  .message-controls.mobile .edit-btn {
+    background: #3498db;
+    color: white;
+  }
+  
+  .message-controls.mobile .delete-btn {
+    background: #e74c3c;
+    color: white;
+  }
+  
+  /* Подсветка выбранного сообщения */
+  .message.selected {
+    background: #e3f2fd !important;
+    transform: scale(1.02);
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+    position: relative;
+    z-index: 10;
+  }
+  
+  /* Затемнение фона */
+  .message-controls-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: transparent;
+    z-index: 1999;
+  }
+  
+  /* Скрываем стандартные кнопки на мобильных */
+  .message .message-controls:not(.mobile) {
+    display: none;
+  }
+}
+
+/* ===== ИСПРАВЛЕНИЕ ДЛЯ ДЛИННЫХ СООБЩЕНИЙ ===== */
+.message {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  max-width: 70%;
+}
+
+.message .text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Для очень длинных слов */
+.message .text {
+  overflow-x: hidden;
+}
+
+/* На мобильных */
+@media screen and (max-width: 768px) {
+  .message {
+    max-width: 85%;
+  }
+  
+  .message .text {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+}

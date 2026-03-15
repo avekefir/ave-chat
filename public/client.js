@@ -427,35 +427,202 @@ socket.on('new message', (msg) => {
 
 // --- РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ СООБЩЕНИЙ ---
 
-// Функция для добавления меню к сообщению
+// --- МОБИЛЬНОЕ УПРАВЛЕНИЕ СООБЩЕНИЯМИ ---
+let selectedMessage = null;
+let controlsOverlay = null;
+
+// Создаем overlay для мобильных кнопок
+function createMobileControls() {
+  if (document.querySelector('.message-controls-overlay')) return;
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'message-controls-overlay';
+  document.body.appendChild(overlay);
+  
+  // Закрытие по клику на overlay
+  overlay.addEventListener('click', () => {
+    hideMobileControls();
+  });
+  
+  return overlay;
+}
+
+// Показать мобильные кнопки управления (примагничены к правому краю)
+function showMobileControls(messageEl, msg) {
+  if (!controlsOverlay) {
+    controlsOverlay = createMobileControls();
+  }
+  
+  // Убираем выделение с предыдущего сообщения
+  if (selectedMessage) {
+    selectedMessage.classList.remove('selected');
+  }
+  
+  // Выделяем текущее сообщение
+  selectedMessage = messageEl;
+  selectedMessage.classList.add('selected');
+  
+  // Получаем координаты сообщения
+  const rect = messageEl.getBoundingClientRect();
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+  
+  // Создаем или показываем кнопки
+  let controls = document.querySelector('.message-controls.mobile');
+  if (!controls) {
+    controls = document.createElement('div');
+    controls.className = 'message-controls mobile';
+    controls.innerHTML = `
+      <button class="edit-btn" title="Редактировать">✏️</button>
+      <button class="delete-btn" title="Удалить">🗑️</button>
+    `;
+    document.body.appendChild(controls);
+    
+    // Обработчики для кнопок
+    const editBtn = controls.querySelector('.edit-btn');
+    const deleteBtn = controls.querySelector('.delete-btn');
+    
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (selectedMessage && selectedMessage._msgData) {
+        startEditing(selectedMessage, selectedMessage._msgData);
+        hideMobileControls();
+      }
+    });
+    
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (selectedMessage && selectedMessage._msgData) {
+        if (confirm('Удалить сообщение?')) {
+          socket.emit('delete message', selectedMessage._msgData.id);
+        }
+        hideMobileControls();
+      }
+    });
+  }
+  
+  // Всегда примагничиваем к правому краю
+  controls.style.right = '10px';
+  controls.style.left = 'auto';
+  
+  // Позиционируем по вертикали рядом с сообщением
+  const controlsHeight = 56; // Примерная высота кнопок
+  
+  // Центрируем по вертикали относительно сообщения
+  let topPosition = rect.top + (rect.height / 2) - (controlsHeight / 2) + scrollTop;
+  
+  // Проверяем границы экрана
+  if (topPosition < 10) {
+    topPosition = 10; // Не прижимаем к самому верху
+  } else if (topPosition + controlsHeight > window.innerHeight + scrollTop - 10) {
+    topPosition = window.innerHeight + scrollTop - controlsHeight - 10;
+  }
+  
+  controls.style.top = topPosition + 'px';
+  
+  controls.classList.add('show');
+  if (controlsOverlay) controlsOverlay.classList.add('show');
+  
+  // Сохраняем данные сообщения в элементе
+  messageEl._msgData = msg;
+  
+  console.log('Mobile controls shown for message');
+}
+
+// Скрыть мобильные кнопки
+function hideMobileControls() {
+  const controls = document.querySelector('.message-controls.mobile');
+  if (controls) {
+    controls.classList.remove('show');
+  }
+  if (controlsOverlay) {
+    controlsOverlay.classList.remove('show');
+  }
+  if (selectedMessage) {
+    selectedMessage.classList.remove('selected');
+    selectedMessage = null;
+  }
+}
+// Обновляем позицию кнопок при повороте экрана или скролле
+window.addEventListener('resize', () => {
+  if (selectedMessage && window.innerWidth <= 768) {
+    // Перепозиционируем кнопки для выбранного сообщения
+    const controls = document.querySelector('.message-controls.mobile');
+    if (controls && controls.classList.contains('show')) {
+      showMobileControls(selectedMessage, selectedMessage._msgData);
+    }
+  }
+});
+
+// При скролле прячем кнопки
+messagesDiv.addEventListener('scroll', () => {
+  if (window.innerWidth <= 768) {
+    hideMobileControls();
+  }
+});
+// Обновляем функцию addMessageControls для мобильных
 function addMessageControls(messageEl, msg) {
   // Добавляем только для своих сообщений
   if (msg.nickname !== currentNickname) return;
   
-  const controlsDiv = document.createElement('div');
-  controlsDiv.className = 'message-controls';
-  controlsDiv.innerHTML = `
-    <button class="edit-btn" title="Редактировать">✏️</button>
-    <button class="delete-btn" title="Удалить">🗑️</button>
-  `;
+  // Сохраняем данные в элементе для мобильной версии
+  messageEl._msgData = msg;
   
-  messageEl.appendChild(controlsDiv);
+  // Добавляем класс для своих сообщений
   messageEl.classList.add('own-message');
   
-  // Обработчик редактирования
-  const editBtn = controlsDiv.querySelector('.edit-btn');
-  editBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    startEditing(messageEl, msg);
-  });
-  
-  // Обработчик удаления
-  const deleteBtn = controlsDiv.querySelector('.delete-btn');
-  deleteBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    confirmDelete(msg.id);
-  });
+  // Для десктопа добавляем обычные кнопки
+  if (window.innerWidth > 768) {
+    const controlsDiv = document.createElement('div');
+    controlsDiv.className = 'message-controls';
+    controlsDiv.innerHTML = `
+      <button class="edit-btn" title="Редактировать">✏️</button>
+      <button class="delete-btn" title="Удалить">🗑️</button>
+    `;
+    
+    messageEl.appendChild(controlsDiv);
+    
+    // Обработчики для десктопа
+    const editBtn = controlsDiv.querySelector('.edit-btn');
+    const deleteBtn = controlsDiv.querySelector('.delete-btn');
+    
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startEditing(messageEl, msg);
+    });
+    
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm('Удалить сообщение?')) {
+        socket.emit('delete message', msg.id);
+      }
+    });
+  } else {
+    // Для мобильных - добавляем обработчик клика на сообщение
+    messageEl.addEventListener('click', (e) => {
+      // Не показываем кнопки если клик по области редактирования
+      if (e.target.closest('.edit-area')) return;
+      
+      // Показываем кнопки для этого сообщения
+      showMobileControls(messageEl, msg);
+    });
+  }
 }
+
+// Закрываем кнопки при скролле
+messagesDiv.addEventListener('scroll', () => {
+  if (window.innerWidth <= 768) {
+    hideMobileControls();
+  }
+});
+
+// Закрываем при клике вне сообщения
+document.addEventListener('click', (e) => {
+  if (window.innerWidth <= 768) {
+    if (!e.target.closest('.message') && !e.target.closest('.message-controls.mobile')) {
+      hideMobileControls();
+    }
+  }
+});
 
 // Функция начала редактирования
 function startEditing(messageEl, msg) {
