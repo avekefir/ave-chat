@@ -25,6 +25,43 @@ let recordingStartTime;
 const MAX_RECORDING_DURATION = 60000; // 60 секунд максимум
 const MIN_RECORDING_DURATION = 500;   // 500 мс минимум
 
+// --- УПРАВЛЕНИЕ ПРОКРУТКОЙ ---
+let isUserScrolledUp = false;
+let scrollButton = null;
+
+// Создаем кнопку "Вниз"
+function createScrollButton() {
+    if (scrollButton) return;
+    
+    scrollButton = document.createElement('button');
+    scrollButton.id = 'scroll-to-bottom';
+    scrollButton.className = 'scroll-to-bottom';
+    scrollButton.innerHTML = '⬇️';
+    scrollButton.title = 'Перейти к последним сообщениям';
+    scrollButton.style.display = 'none';
+    
+    scrollButton.addEventListener('click', () => {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        isUserScrolledUp = false;
+        scrollButton.style.display = 'none';
+    });
+    
+    document.getElementById('main').appendChild(scrollButton);
+}
+// Отслеживаем прокрутку
+messagesDiv.addEventListener('scroll', () => {
+    const isAtBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 50;
+    
+    if (!isAtBottom) {
+        // Пользователь ушел вверх по истории
+        isUserScrolledUp = true;
+        if (scrollButton) scrollButton.style.display = 'flex';
+    } else {
+        // Пользователь внизу
+        isUserScrolledUp = false;
+        if (scrollButton) scrollButton.style.display = 'none';
+    }
+});
 // --- Вход в чат ---
 joinBtn.addEventListener('click', () => {
   const nickname = nicknameInput.value.trim();
@@ -73,6 +110,9 @@ joinBtn.addEventListener('click', () => {
   sendBtn.disabled = false;
   voiceBtn.disabled = false;  
   messageInput.focus();
+
+  // Добавляем кнопку прокрутки
+  setTimeout(createScrollButton, 500);
 });
 
 // --- Отправка текстового сообщения ---
@@ -414,15 +454,24 @@ if (voiceBtn) {
 
 // --- Обработчики Socket.IO ---
 socket.on('new message', (msg) => {
-  console.log('Получено сообщение:', msg);
-  
-  if (msg.type === 'voice') {
-    addVoiceMessageToDom(msg);
-  } else {
-    addTextMessageToDom(msg);
-  }
-  
-  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    console.log('Получено сообщение:', msg);
+    
+    // Сохраняем последний ID сообщения
+    lastMessageId = msg.id;
+    
+    // Добавляем сообщение в DOM
+    if (msg.type === 'voice') {
+        addVoiceMessageToDom(msg);
+    } else {
+        addTextMessageToDom(msg);
+    }
+    
+    // Прокручиваем вниз ТОЛЬКО если пользователь уже был внизу
+    const isAtBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 100;
+    
+    if (isAtBottom && !isUserScrolledUp) {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
 });
 
 // --- РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ СООБЩЕНИЙ ---
@@ -884,10 +933,7 @@ if (!typingStatus) {
         </span>
     `;
     document.body.appendChild(typingStatus);
-    console.log('✅ Верхний индикатор создан');
 }
-
-// Добавляем класс к chat-container для отступа
 
 // Обработка ввода текста
 messageInput.addEventListener('input', () => {
@@ -896,7 +942,6 @@ messageInput.addEventListener('input', () => {
     if (!isTyping) {
         isTyping = true;
         socket.emit('typing start');
-        console.log('📤 typing start emitted');
     }
     
     clearTimeout(typingTimer);
@@ -904,7 +949,6 @@ messageInput.addEventListener('input', () => {
         if (isTyping) {
             isTyping = false;
             socket.emit('typing stop');
-            console.log('📤 typing stop emitted');
         }
     }, TYPING_TIMEOUT);
 });
@@ -927,11 +971,10 @@ sendBtn.addEventListener('click', () => {
     }
 });
 
-// Хранилище печатающих пользователей
 let typingUsers = new Map();
 
 socket.on('typing start', (nickname) => {
-    console.log('📥 RECEIVED typing start:', nickname);
+    console.log('📥 typing start:', nickname);
     if (nickname === currentNickname) return;
     
     if (!typingUsers.has(nickname)) {
@@ -944,7 +987,7 @@ socket.on('typing start', (nickname) => {
 });
 
 socket.on('typing stop', (nickname) => {
-    console.log('📥 RECEIVED typing stop:', nickname);
+    console.log('📥 typing stop:', nickname);
     if (nickname === currentNickname) return;
     
     if (typingUsers.has(nickname)) {
@@ -956,9 +999,7 @@ socket.on('typing stop', (nickname) => {
 
 function updateTypingIndicator() {
     const users = Array.from(typingUsers.keys());
-    const typingTextEl = document.querySelector('#typing-status .typing-text');
-    
-    if (!typingTextEl) return;
+    const typingTextEl = typingStatus.querySelector('.typing-text');
     
     if (users.length === 0) {
         typingStatus.classList.remove('visible');
@@ -977,12 +1018,20 @@ function updateTypingIndicator() {
     
     typingTextEl.textContent = text;
     typingStatus.classList.add('visible');
-    if (chatContainer) chatContainer.classList.add('with-typing');
+    //if (chatContainer) chatContainer.classList.add('with-typing');
     
-    console.log('✅ Верхний индикатор показывает:', text);
+    // Принудительно проверяем позицию скролла
+    // Если пользователь был внизу, остаемся внизу
+    const isAtBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 50;
+    if (isAtBottom) {
+        // Небольшая задержка, чтобы DOM обновился
+        setTimeout(() => {
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }, 10);
+    }
 }
 
-// Очищаем индикатор при выходе из чата
+// Очищаем при выходе
 window.addEventListener('beforeunload', () => {
     if (isTyping) {
         socket.emit('typing stop');
