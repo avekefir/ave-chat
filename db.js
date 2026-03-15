@@ -6,30 +6,47 @@ const fs = require('fs');
 const dbPath = path.join(__dirname, 'chat.db');
 console.log('Database path:', dbPath);
 
-// Удаляем старую базу если она есть (для чистого старта)
-if (fs.existsSync(dbPath)) {
-  console.log('Removing old database...');
-  fs.unlinkSync(dbPath);
-}
-
-// Создаем новую базу с правильной структурой
+// НЕ УДАЛЯЕМ базу, просто подключаемся
 const db = new Database(dbPath);
 
-// Создаём таблицу с правильными колонками
-db.exec(`
-  CREATE TABLE messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nickname TEXT NOT NULL,
-    content TEXT NOT NULL,
-    type TEXT DEFAULT 'text',
-    edited INTEGER DEFAULT 0,
-    edited_at DATETIME,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+// Проверяем структуру таблицы
+const tableExists = db.prepare(`
+  SELECT name FROM sqlite_master WHERE type='table' AND name='messages'
+`).get();
 
-console.log('✅ Database created with correct structure');
-console.log('Columns: id, nickname, content, type, edited, edited_at, timestamp');
+if (!tableExists) {
+  console.log('Creating new database...');
+  // Создаём таблицу
+  db.exec(`
+    CREATE TABLE messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nickname TEXT NOT NULL,
+      content TEXT NOT NULL,
+      type TEXT DEFAULT 'text',
+      edited INTEGER DEFAULT 0,
+      edited_at DATETIME,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  console.log('✅ Table created');
+} else {
+  console.log('✅ Database exists, checking structure...');
+  
+  // Проверяем наличие всех нужных колонок
+  const columns = db.prepare("PRAGMA table_info(messages)").all();
+  const columnNames = columns.map(col => col.name);
+  
+  if (!columnNames.includes('edited')) {
+    console.log('Adding edited column...');
+    db.exec(`ALTER TABLE messages ADD COLUMN edited INTEGER DEFAULT 0`);
+  }
+  if (!columnNames.includes('edited_at')) {
+    console.log('Adding edited_at column...');
+    db.exec(`ALTER TABLE messages ADD COLUMN edited_at DATETIME`);
+  }
+  
+  console.log('✅ Database structure is correct');
+}
 
 // Функция для сохранения нового сообщения
 function saveMessage(nickname, content, type = 'text') {
@@ -63,7 +80,7 @@ function getRecentMessages(limit = 50) {
 // Получить сообщение по ID
 function getMessageById(id) {
   try {
-    const stmt = db.prepare('SELECT id, nickname, content, type, edited, edited_at, timestamp FROM messages WHERE id = ?');
+    const stmt = db.prepare('SELECT * FROM messages WHERE id = ?');
     return stmt.get(id);
   } catch (err) {
     console.error('Error in getMessageById:', err);
@@ -83,12 +100,6 @@ function updateMessage(id, newText) {
     `);
     
     const result = stmt.run(newText, id);
-    console.log('Update result:', result);
-    
-    if (result.changes === 0) {
-      console.log('No rows updated - message not found or wrong type');
-    }
-    
     return result;
   } catch (err) {
     console.error('Error in updateMessage:', err);
