@@ -24,10 +24,11 @@ app.use('/voice', express.static(voiceDir));
 app.get('/api/messages', (req, res) => {
   try {
     const messages = db.getRecentMessages(50);
+    console.log('Sending messages:', messages.length); // Отладка
     res.json(messages);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
+    console.error('API Error:', err);
+    res.status(500).json({ error: 'Database error: ' + err.message });
   }
 });
 
@@ -156,6 +157,96 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Ошибка сохранения голосового сообщения:', err);
       socket.emit('error', 'Не удалось сохранить голосовое сообщение');
+    }
+  });
+
+  // --- Редактирование сообщения ---
+  socket.on('edit message', (data) => {
+    const nickname = users.get(socket.id);
+    if (!nickname) {
+      socket.emit('error', 'Вы не представились');
+      return;
+    }
+
+    const { messageId, newText } = data;
+    console.log('Edit request:', { messageId, newText, nickname });
+    
+    if (!messageId || !newText?.trim()) {
+      socket.emit('error', 'Неверные данные для редактирования');
+      return;
+    }
+
+    try {
+      // Проверяем, что сообщение принадлежит этому пользователю
+      const message = db.getMessageById(messageId);
+      console.log('Found message:', message);
+      
+      if (!message) {
+        socket.emit('error', 'Сообщение не найдено');
+        return;
+      }
+      
+      if (message.nickname !== nickname) {
+        console.log('Nickname mismatch:', { messageNickname: message.nickname, userNickname: nickname });
+        socket.emit('error', 'Нельзя редактировать чужие сообщения');
+        return;
+      }
+
+      // Обновляем сообщение в БД
+      db.updateMessage(messageId, newText.trim());
+      
+      // Отправляем обновление всем
+      io.emit('message edited', {
+        id: messageId,
+        text: newText.trim(),
+        edited: true,
+        editedAt: new Date().toISOString()
+      });
+      
+      console.log('Message edited successfully');
+    } catch (err) {
+      console.error('Ошибка редактирования:', err);
+      socket.emit('error', 'Не удалось отредактировать сообщение: ' + err.message);
+    }
+  });
+
+  // --- Удаление сообщения ---
+  socket.on('delete message', (messageId) => {
+    const nickname = users.get(socket.id);
+    if (!nickname) {
+      socket.emit('error', 'Вы не представились');
+      return;
+    }
+
+    try {
+      // Проверяем, что сообщение принадлежит этому пользователю
+      const message = db.getMessageById(messageId);
+      if (!message) {
+        socket.emit('error', 'Сообщение не найдено');
+        return;
+      }
+      
+      if (message.nickname !== nickname) {
+        socket.emit('error', 'Нельзя удалять чужие сообщения');
+        return;
+      }
+
+      // Если это голосовое сообщение, удаляем файл
+      if (message.type === 'voice') {
+        const filePath = path.join(voiceDir, message.content);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+
+      // Удаляем из БД
+      db.deleteMessage(messageId);
+      
+      // Сообщаем всем об удалении
+      io.emit('message deleted', messageId);
+    } catch (err) {
+      console.error('Ошибка удаления:', err);
+      socket.emit('error', 'Не удалось удалить сообщение');
     }
   });
 
